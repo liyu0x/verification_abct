@@ -1,63 +1,69 @@
 import random
 import math
 import multiprocessing
-from task_simon import checks
+from task import task_simon
+from utils import util
+from task import task_counter
 
+MAX_PROCESSES = 7
 
-POOL = multiprocessing.get_context('fork').Pool(processes=10)
+POOL = multiprocessing.get_context('fork').Pool(processes=MAX_PROCESSES)
 ROUNDS = 15
-WEIGHT = 31
+WEIGHT = 22
 CIPHER_NAME = "SIMON32"
 
-
-def verify(in_diff, out_diff, rounds, boomerang, offset=0):
+def verify(in_diff, out_diff, rounds, counter, offset=0):
+    counter.value = 0
     test_n = 2**WEIGHT
+    print("\n{}, INPUT_DIFF:{}, OUTPUT_DIFF:{}, the number of test data: {}".format(CIPHER_NAME, hex(in_diff), hex(out_diff), test_n))
     key = random.randint(0, 2**32)
-    records = set()
-    count = 0
     result = 0
     task_list = []
-    while count < test_n:
-        x1 = random.randint(0, 2**32)
-        if x1 in records:
-            continue
-        if x1 > (x1 ^ in_diff):
-            continue
-        count += 1
-        records.add(x1)
-    records = list(records)
-    batch_size = 100000
-    batch_num = int(len(records) / batch_size)
-    for i in range(0, batch_num):
+    seg_list = util.split_task(0, test_n, MAX_PROCESSES)
+    for i in range(len(seg_list)-1):  
         task_list.append(
             POOL.apply_async(
-                checks,
+                task_simon.checks,
                 args=(
-                    records[i * batch_size : i * batch_size + batch_size],
+                    seg_list[i],
+                    seg_list[i+1],
                     key,
                     in_diff,
                     out_diff,
-                    rounds,
+                    rounds, 
                     offset,
-                    boomerang
+                    counter
                 ),
             )
         )
     for task in task_list:
         result += task.get()
     if result == 0:
+        print("\nCipher: {0}, Invalid".format(CIPHER_NAME))
         return "Invalid"
-    prob = result / (batch_size* batch_num)
-    return str(math.log2(prob))
+    prob = result/test_n
+    final_weight = math.log2(prob)
+    print("\nCipher:{0}, prob:{1}, weight:{2}".format(CIPHER_NAME, prob, final_weight))
+    return str(final_weight)
 
 
 if __name__ == "__main__":
     result_file_name = 'verify_result_simon32-{0}.txt'.format(ROUNDS)
-
+    manager = multiprocessing.Manager()
+    counter = manager.Value('i', 0)
+    counter_task = POOL.apply_async(
+                task_counter.print_process,
+                args=(
+                    counter,
+                    2**WEIGHT
+                ),
+            )
     save_file = open(result_file_name, "w")
-    data_file = open("check_list_simon32.txt", "r")
+    data_file = open("diff_files/check_list_simon32.txt", "r")
     data_list = []
     data = data_file.readline()
+
+
     while data != "":
         temps = data.split(",")
         data = []
@@ -72,8 +78,8 @@ if __name__ == "__main__":
 
 
     for dd in data_list:
-        res = verify(dd[0], dd[3], ROUNDS, True)
-        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}\n\t PROB:{3}\n".format(CIPHER_NAME, dd[0], dd[3], res)
-
+        res = verify(dd[0], dd[3], ROUNDS, counter)
+        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}\n\t WEIGHT:{3}\n".format(CIPHER_NAME, dd[0], dd[3], res)
+        save_file.write(save_str)
 
 
