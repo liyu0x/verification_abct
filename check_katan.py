@@ -5,7 +5,7 @@ from task import task_katan
 from utils import util
 from task import task_counter
 
-MAX_PROCESSES = 6
+MAX_PROCESSES = 11
 
 POOL = multiprocessing.get_context('fork').Pool(processes=MAX_PROCESSES)
 ROUNDS = 84
