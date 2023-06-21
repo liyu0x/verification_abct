@@ -17,7 +17,6 @@ VALID_SETUPS = {32: {64: (32, z0)},
                 96: {96: (52, z2), 144: (54, z3)},
                 128: {128: (68, z2), 192: (69, z3), 256: (72, z4)}}
 
-ROUNDS = 16
 WEIGHT = 32
 CIPHER_NAME = "SIMON32"
 
@@ -148,9 +147,9 @@ def generate_round_key(key, key_size, word_size, rounds, zseq):
 
 def cpu_task():
     # read differential info from files
-    result_file_name = 'verify_result_simon32-{0}.txt'.format(ROUNDS)
+    result_file_name = 'verify_result_simon32.txt'
     save_file = open(result_file_name, "w")
-    data_file = open("diff_files/check_list_simon32.txt", "r")
+    data_file = open("check_list_simon32.txt", "r")
     data_list = []
     data = data_file.readline()
     while data != "":
@@ -160,7 +159,10 @@ def cpu_task():
             if i.startswith("0x"):
                 data.append(int(i, 16))
             else:
-                data.append(int(i))
+                if "." in i:
+                    data.append(float(i))
+                else:
+                    data.append(int(i))
         data.append(1)
         data_list.append(data)
         data = data_file.readline()
@@ -169,36 +171,46 @@ def cpu_task():
     threads_in_per_block = 2 ** 8
     blocks_in_per_grid = 2 ** 10
     total_threads = threads_in_per_block * blocks_in_per_grid
-    result = numpy.zeros((total_threads,), dtype=numpy.uint32)
-    temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)
-
     block_size = BLOCK_SIZE
     key_size = KEY_SIZE
     word_size = block_size >> 1
     rounds, z_que = VALID_SETUPS[block_size][key_size]
-    rounds = ROUNDS
-    key = random.randint(0, 2 ** 32)
-    sub_keys = generate_round_key(key, key_size, word_size, rounds, z_que)
-
-    sub_keys = cuda.to_device(sub_keys)
-    result = cuda.to_device(result)
-    temp_list = cuda.to_device(temp_list)
 
     for dd in data_list:
         start_time = time.time()
-        simon_task[blocks_in_per_grid, threads_in_per_block](sub_keys, dd[0], dd[3], result, temp_list, block_size)
+        input_diff = dd[0]
+        output_diff = dd[3]
+        rounds = dd[4]
+        boomerang_weight = dd[5]
+        rectangle_weight = dd[6]
+
+        key = random.randint(0, 2 ** 32)
+        ######################
+        result = numpy.zeros((total_threads,), dtype=numpy.uint32)
+        temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)
+        sub_keys = generate_round_key(key, key_size, word_size, rounds, z_que)
+
+        cuda_sub_keys = cuda.to_device(sub_keys)
+        cuda_result = cuda.to_device(result)
+        cuda_temp_list = cuda.to_device(temp_list)
+        #############################
+        simon_task[blocks_in_per_grid, threads_in_per_block](cuda_sub_keys, input_diff, output_diff, cuda_result,
+                                                             cuda_temp_list,
+                                                             block_size)
         res = numpy.zeros((1,), dtype=numpy.uint64)[0]
-        for r in result:
+        for r in cuda_result:
             res += r
         if res == 0:
             tip = "Invalid"
         else:
             tip = math.log2(res / 2 ** 32)
 
-        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}\n\t WEIGHT:{3}\n".format(CIPHER_NAME, hex(dd[0]),
-                                                                                         hex(dd[3]), tip)
+        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n".format(
+            CIPHER_NAME, hex(input_diff),
+            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds)
         save_file.write(save_str)
         save_file.flush()
+        print(save_str)
         print("Task done, time:{}".format(time.time() - start_time))
 
 

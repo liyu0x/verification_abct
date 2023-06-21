@@ -5,7 +5,6 @@ import numpy as np
 import random
 import time
 
-ROUNDS = 84
 WEIGHT = 32
 CIPHER_NAME = "KATAN32"
 
@@ -150,7 +149,7 @@ def generate_round_key(key):
 
 def cpu_task():
     # read differential info from files
-    result_file_name = 'verify_result_katan32-{0}.txt'.format(ROUNDS + 1)
+    result_file_name = 'verify_result_katan32.txt'
     save_file = open(result_file_name, "w")
     data_file = open("diff_files/check_list_katan32.txt", "r")
     data_list = []
@@ -162,7 +161,10 @@ def cpu_task():
             if i.startswith("0x"):
                 data.append(int(i, 16))
             else:
-                data.append(int(i))
+                if "." in i:
+                    data.append(float(i))
+                else:
+                    data.append(int(i))
         data.append(1)
         data_list.append(data)
         data = data_file.readline()
@@ -171,32 +173,44 @@ def cpu_task():
     threads_in_per_block = 2 ** 8
     blocks_in_per_grid = 2 ** 10
     total_threads = threads_in_per_block * blocks_in_per_grid
-
-    result = numpy.zeros((total_threads,), dtype=numpy.uint32)
-    temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)
-    key = random.randint(0, 2 ** 32)
-    sub_keys = generate_round_key(key)
-
-    sub_keys = cuda.to_device(sub_keys)
-    result = cuda.to_device(result)
     ir = cuda.to_device(IR)
-    temp_list = cuda.to_device(temp_list)
 
     for dd in data_list:
         start_time = time.time()
-        katan_task[blocks_in_per_grid, threads_in_per_block](sub_keys, dd[0], dd[3], ROUNDS, result, 0, ir,
-                                                             temp_list)
+        input_diff = dd[0]
+        output_diff = dd[3]
+        rounds = dd[4]
+        boomerang_weight = dd[5]
+        rectangle_weight = dd[6]
+
+        #################
+        result = numpy.zeros((total_threads,), dtype=numpy.uint32)
+        temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)
+        key = random.randint(0, 2 ** 32)
+        sub_keys = generate_round_key(key)
+
+        cuda_sub_keys = cuda.to_device(sub_keys)
+        cuda_result = cuda.to_device(result)
+        cuda_temp_list = cuda.to_device(temp_list)
+        #################
+
+        katan_task[blocks_in_per_grid, threads_in_per_block](cuda_sub_keys, input_diff, output_diff, rounds,
+                                                             cuda_result, 0, ir,
+                                                             cuda_temp_list)
         res = numpy.zeros((1,), dtype=numpy.uint64)[0]
-        for r in result:
+        for r in cuda_result:
             res += r
         if res == 0:
             tip = "Invalid"
         else:
             tip = math.log2(res / 2 ** 32)
 
-        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}\n\t WEIGHT:{3}\n".format(CIPHER_NAME, dd[0], dd[3], tip)
+        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n".format(
+            CIPHER_NAME, hex(input_diff),
+            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds)
         save_file.write(save_str)
         save_file.flush()
+        print(save_str)
         print("Task done, time:{}".format(time.time() - start_time))
 
 
