@@ -205,9 +205,9 @@ def cpu_task():
         else:
             tip = math.log2(res / 2 ** 32)
 
-        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n".format(
+        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n\tKey:{7}\n".format(
             CIPHER_NAME, hex(input_diff),
-            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds)
+            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds, hex(key))
         save_file.write(save_str)
         save_file.flush()
         print(save_str)

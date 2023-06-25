@@ -139,11 +139,19 @@ def num2bits_cpu(num, bit_length):
     return bits
 
 
+def lfsr(iv):
+    state = num2bits_cpu(iv, 80)
+    for i in range(254 * 2):
+        yield state[0]
+        state.append(state[0] ^ state[19] ^ state[30] ^ state[67])
+        state.pop(0)
+
+
 def generate_round_key(key):
     keys = np.zeros(254 * 2, dtype=numpy.int32)
-    state = num2bits_cpu(key, 80)
+    stream = lfsr(key)
     for i in range(254 * 2):
-        keys[i] = state[0] ^ state[19] ^ state[30] ^ state[67]
+        keys[i] = (next(stream))
     return keys
 
 
@@ -151,7 +159,7 @@ def cpu_task():
     # read differential info from files
     result_file_name = 'verify_result_katan32.txt'
     save_file = open(result_file_name, "w")
-    data_file = open("diff_files/check_list_katan32.txt", "r")
+    data_file = open("check_list_katan32.txt", "r")
     data_list = []
     data = data_file.readline()
     while data != "":
@@ -179,7 +187,7 @@ def cpu_task():
         start_time = time.time()
         input_diff = dd[0]
         output_diff = dd[3]
-        rounds = dd[4]
+        rounds = dd[4] - 1
         boomerang_weight = dd[5]
         rectangle_weight = dd[6]
 
@@ -205,9 +213,9 @@ def cpu_task():
         else:
             tip = math.log2(res / 2 ** 32)
 
-        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n".format(
+        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n\tKey:{7}\n".format(
             CIPHER_NAME, hex(input_diff),
-            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds)
+            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds, hex(key))
         save_file.write(save_str)
         save_file.flush()
         print(save_str)
