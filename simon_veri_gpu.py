@@ -184,7 +184,7 @@ def cpu_task():
         boomerang_weight = dd[5]
         rectangle_weight = dd[6]
 
-        key = random.randint(0, 2 ** 32)
+        key = random.randint(0, 2 ** key_size)
         ######################
         result = numpy.zeros((total_threads,), dtype=numpy.uint32)
         temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)

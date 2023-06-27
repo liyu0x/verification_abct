@@ -194,7 +194,7 @@ def cpu_task():
         #################
         result = numpy.zeros((total_threads,), dtype=numpy.uint32)
         temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)
-        key = random.randint(0, 2 ** 32)
+        key = random.randint(0, 2 ** 80)
         sub_keys = generate_round_key(key)
 
         cuda_sub_keys = cuda.to_device(sub_keys)
